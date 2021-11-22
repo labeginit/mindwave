@@ -1,5 +1,6 @@
 # Model class of a command
 import json
+import time
 from json import JSONDecodeError
 
 import ServerConnection
@@ -11,59 +12,66 @@ class Command:
     # Constructor
     def __init__(self):
         self.statusOn = False
-        self.command = "Unspecified command"
         self.blinks = 0
-        self.strongBlink = False
+        self.action = 0
+        self.blinkTime = time.perf_counter()
 
-    def update_command(self, blinks):
-        if blinks == 1:
+    def update_command(self):
+        command = ""
+        if self.action == 1:
             if self.statusOn:
-                self.command = "{'_id':'Livingroom TV', 'on':'false'}"
+                command = "{'_id':'Livingroom TV', 'on':'false'}"
                 self.statusOn = False
             else:
-                self.command = "{'_id':'Livingroom TV', 'on':'true'}"
+                command = "{'_id':'Livingroom TV', 'on':'true'}"
                 self.statusOn = True
 
             # If blinked between 3 and 4 times
-        elif blinks == 2:
-            self.command = "{'_id':'Livingroom TV', 'channel':'3'}"
+        elif self.action == 2:
+            command = "{'_id':'Livingroom TV', 'channel':'2'}"
             # If blinked between 5 and 6 times
-        elif blinks == 3:
-            self.command = "{'_id':'Livingroom TV', 'channel':'4'}"
+        elif self.action == 3:
+            command = "{'_id':'Livingroom TV', 'channel':'3'}"
             # If blinked 7 or more times
-        elif blinks == 4:
-            self.command = "{'_id':'Livingroom TV', 'channel':'5'}"
-        elif blinks == 5:
-            self.command = "{'_id':'Livingroom TV', 'channel':'6'}"
-        return self.command
+        elif self.action == 4:
+            command = "{'_id':'Livingroom TV', 'channel':'4'}"
+        if not command == "":
+            return command
+        else:
+            return False
 
     def process_data(self, data):
         global jsonRep
         try:
             jsonRep = json.loads(data)
-
+            self.check_attention(jsonRep)
         except JSONDecodeError as e:
             print(e.msg)
-        try:
-            if 0 <= jsonRep["blinkStrength"] < 55:
-                print(jsonRep)
-            if 55 <= jsonRep["blinkStrength"] < 110:
-                print(jsonRep)
-                self.blinks += 1
-                print(f"Blink nr: {self.blinks}")
-            elif jsonRep["blinkStrength"] >= 110:
-                print(jsonRep)
-                self.strongBlink = True
-                print("Strong blink registered")
-        except KeyError as ke:
-            print("...")
 
-        if self.strongBlink:
-            self.update_command(self.blinks)
-            ServerConnection.send_data(self.command)
-            print("Command updated and sent")
-            self.strongBlink = False
+        if time.perf_counter() - self.blinkTime >= 4 and self.blinks != 0:
+            if self.blinks > 4:
+                self.action = 2
+            else:
+                self.action = self.blinks
             self.blinks = 0
-            return True
-        return False
+        if self.action != 0:
+            ServerConnection.send_data(self.update_command())
+            self.action = 0
 
+    def check_attention(self, jsonRep):
+        try:
+            if jsonRep['eSense']['attention'] >= 75 and not self.statusOn:
+                print(f"attention: {jsonRep['eSense']['attention']}")
+                self.action = 1
+        except KeyError as ke:
+            self.check_blinks(jsonRep)
+
+    def check_blinks(self, jsonRep):
+        try:
+            if 55 <= jsonRep["blinkStrength"]:
+                print(f"blinkStrength: {jsonRep['blinkStrength']}")
+                self.blinks += 1
+                self.blinkTime = time.perf_counter()
+                print(f"Blink nr: {self.blinks}")
+        except KeyError as ke:
+            print("unknown json")
