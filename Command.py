@@ -11,7 +11,7 @@ class Command:
 
     # Constructor
     def __init__(self):
-        self.statusOn = False
+        self.snooze = False
         self.blinks = 0
         self.action = 0
         self.blinkTime = time.perf_counter()
@@ -19,22 +19,10 @@ class Command:
     def update_command(self):
         command = ""
         if self.action == 1:
-            if self.statusOn:
-                command = "{'_id':'Livingroom TV', 'on':'false'}"
-                self.statusOn = False
-            else:
-                command = "{'_id':'Livingroom TV', 'on':'true'}"
-                self.statusOn = True
+            command = "{'_id':'Livingroom TV', 'on':'false'}"
 
-            # If blinked between 3 and 4 times
-        elif self.action == 2:
-            command = "{'_id':'Livingroom TV', 'channel':'2'}"
-            # If blinked between 5 and 6 times
-        elif self.action == 3:
-            command = "{'_id':'Livingroom TV', 'channel':'3'}"
-            # If blinked 7 or more times
-        elif self.action == 4:
-            command = "{'_id':'Livingroom TV', 'channel':'4'}"
+        elif self.action >= 2:
+            command = f"{{'_id':'Livingroom TV', 'channel':'{self.action}'}}"
         if not command == "":
             return command
         else:
@@ -49,7 +37,10 @@ class Command:
             print(e.msg)
 
         if time.perf_counter() - self.blinkTime >= 4 and self.blinks != 0:
-            if self.blinks > 4:
+            if self.snooze:
+                self.action = 6
+                self.snooze = False
+            elif self.blinks > 4:
                 self.action = 2
             else:
                 self.action = self.blinks
@@ -60,9 +51,11 @@ class Command:
 
     def check_attention(self, jsonRep):
         try:
-            if jsonRep['eSense']['attention'] >= 75 and not self.statusOn:
+            if jsonRep['eSense']['attention'] >= 75:
                 print(f"attention: {jsonRep['eSense']['attention']}")
-                self.action = 1
+                self.action = 7
+            else:
+                self.check_meditation(jsonRep)
         except KeyError as ke:
             self.check_blinks(jsonRep)
 
@@ -75,3 +68,9 @@ class Command:
                 print(f"Blink nr: {self.blinks}")
         except KeyError as ke:
             print("unknown json")
+
+    def check_meditation(self, jsonRep):
+        print(f"mediation: {jsonRep['eSense']['meditation']}")
+        if jsonRep['eSense']['meditation'] >= 95 and not self.snooze:
+            self.action = 5
+            self.snooze = True

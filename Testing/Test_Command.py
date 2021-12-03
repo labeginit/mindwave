@@ -12,7 +12,4 @@ class TestCommand(unittest.TestCase):
         command = Command()
         command.process_data('{"blinkStrength": 255}')
         self.assertEqual(command.blinks, 1)
-    def test_attention(self):
-        command = Command()
-        command.process_data('{eSense: {attention: 77}}')
-        self.assertEqual(command.action, 0)
+
